@@ -1,41 +1,39 @@
-function UCIQE=UCIQE(rgb_in)
-%Calculate UCIQE (Underwater Colour Image Quality Evaluation).
-%
-%Usage
-%     UCIQE_value = UCIQE(RGB_Image)
-%  The implemented algorithm is based on the paper of M. Yang et al.:
-%  An Underwater Color Image Quality Evaluation Metric.
-%
-% Implemented by Z. J. Wang, UAV Lab, National University of Singapore
-% Sept. 2018
+%%%Underwater Color Image Quality Metric%%%%%%%
+function Qualty_Val=UCIQE(I,Coe_Metric)
 
+%%% Trained coefficients are c1=0.4680, c2=0.2745, c3=0.2576.
+%% UCIQE=c1*Var_Chr+c2*Con_lum+c3*Aver_Sat
+%%%%%%%   Var_chr   is ¦Òc : the standard deviation of chroma
+%%%%%%%   Con_lum is conl: the contrast of luminance
+%%%%%%%   Aver_Sat  is ¦Ìs : the average of saturation
+%%%%%%%   Coe_Metric=[c1, c2, c3]are weighted coefficients.
+if nargin==1
+    %% According to training result mentioned in the paper:
+    %% Obtained coefficients are c1=0.4680, c2=0.2745, c3=0.2576.
+    Coe_Metric=[0.4680    0.2745    0.2576];
+end
+%%%Transform to Lab color space
+cform = makecform('srgb2lab');
+Img_lab = applycform(I, cform);
 
-rgb = double(rgb_in);
-R = rgb(:,:,1);
-G = rgb(:,:,2);
-B = rgb(:,:,3);
-mx=max(rgb,[],3);% max of the 3 colors
-mn=min(rgb,[],3);% min of the 3 colors
+Img_lum=double(Img_lab(:,:,1));
+Img_lum=Img_lum./255+ eps;
 
-alpha = 0.01 * (mn ./ mx);
-gamma = 3;
-Q = exp(alpha .* gamma);
-% calculate Chroma
-% lab = rgb2lab(rgb);
-% a = lab(:,:,2);
-% b = lab(:,:,3);
-[l,a,b] = rgb2lab_n(rgb);
-Chroma = sqrt(a.^2 + b.^2);
-StdVarianceChroma = std(reshape(Chroma(:,:),[],1));
+Img_a=double(Img_lab(:,:,2))./255;
+Img_b=double(Img_lab(:,:,3))./255;
+%%%% Chroma
+Img_Chr=sqrt(Img_a(:).^2+Img_b(:).^2);
+%%%% Saturation
+Img_Sat=Img_Chr./sqrt(Img_Chr.^2+Img_lum(:).^2);
 
-% calculate saturation
-hsv = rgb2hsv(rgb);
-Saturation = hsv(:,:,2);
-MeanSaturation = mean(reshape(Saturation(:,:),[],1));
-
-% calculate luminance
-% Luminance = hsv(:,:,3);
-
-ContrastLuminance = max(reshape(l(:,:),[],1)) - min(reshape(l(:,:),[],1))
-
-UCIQE = 0.4680 * StdVarianceChroma + 0.2745 * ContrastLuminance + 0.2576 * MeanSaturation;
+%% Average of saturation
+Aver_Sat=mean(Img_Sat);
+%% Average of Chroma
+Aver_Chr=mean(Img_Chr);
+%%% Variance of Chroma
+Var_Chr =sqrt(mean((abs(1-(Aver_Chr./Img_Chr).^2))));
+%%% Contrast of luminance
+Tol=stretchlim(Img_lum);
+Con_lum=Tol(2)-Tol(1);
+%%% get final quality value
+Qualty_Val=Coe_Metric(1)*Var_Chr+Coe_Metric(2)*Con_lum+Coe_Metric(3)*Aver_Sat;
